@@ -1,5 +1,6 @@
 %lang starknet
 
+from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.math_cmp import is_le, is_not_zero
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.alloc import alloc
@@ -87,7 +88,7 @@ end
 # Getters
 # 
 
-@external
+@view
 func get_entry{
     syscall_ptr : felt*,
     pedersen_ptr : HashBuiltin*,
@@ -102,7 +103,7 @@ func get_entry{
     let (s2) = state2.read(source)
 
     let (s22) = pow(s2, 2)
-    let (value) = pow(s1 - s22, 1/2)
+    let value = s1 - s22
 
     # construct response
 
@@ -121,6 +122,7 @@ func get_entry{
 end
 
 
+@view
 func get_entries{
     syscall_ptr : felt*,
     pedersen_ptr : HashBuiltin*,
@@ -147,6 +149,36 @@ func get_entries{
     return (entries_len, entries)
 end
 
+
+func get_value{
+syscall_ptr : felt*,
+pedersen_ptr : HashBuiltin*,
+range_check_ptr
+}(aggregation_mode : felt) -> (
+      value : felt,
+      decimals : felt,
+      last_updated_timestamp : felt,
+      num_sources_aggregated : felt
+):
+    alloc_locals
+
+    assert aggregation_mode = 0  # the default and the only one implemented
+
+    let (entries_len, entries) = get_entries(0, syscall_ptr)
+
+      if entries_len == 0:
+          return (0, 0, 0, 0)
+      end
+
+      let (value, _) = Entry_entries_mean(entries_len, entries, 0, 0)
+      let (last_updated_timestamp) = Entry_aggregate_timestamps_max(entries_len, entries)
+      return (value, 0, last_updated_timestamp, entries_len)
+
+end
+
+#
+# Library
+#
 
 func Oracle_build_entries_array{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     key : felt,
@@ -184,4 +216,42 @@ func Oracle_build_entries_array{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*
         key, sources_len, sources, sources_idx + 1, entries_idx + 1, entries
     )
     return (entries_len, entries)
+end
+
+
+func Entry_aggregate_timestamps_max{range_check_ptr}(num_entries : felt, entries_ptr : Entry*) -> (
+    last_updated_timestamp : felt
+):
+    alloc_locals
+
+    let entry_timestamp = [entries_ptr].timestamp
+    if num_entries == 1:
+        return (entry_timestamp)
+    end
+
+    let (rec_last_updated_timestamp) = Entry_aggregate_timestamps_max(
+        num_entries - 1, entries_ptr + Entry.SIZE
+    )
+    let (is_current_entry_last) = is_le(rec_last_updated_timestamp, entry_timestamp)
+    if is_current_entry_last == TRUE:
+        return (entry_timestamp)
+    end
+    return (rec_last_updated_timestamp)
+end
+
+
+func Entry_entries_mean{range_check_ptr}(
+    num_entries : felt, entries_ptr : Entry*, idx : felt, remainder : felt
+) -> (value : felt, remainder : felt):
+    alloc_locals
+    let running_value = [entries_ptr + idx * Entry.SIZE].value
+    let (local summand, new_remainder) = unsigned_div_rem(running_value + remainder, num_entries)
+    if idx + 1 == num_entries:
+        return (summand, new_remainder)
+    end
+    let (recursive_summand, recursive_remainder) = Entry_entries_mean(
+        num_entries, entries_ptr, idx + 1, new_remainder
+    )
+    let value = summand + recursive_summand
+    return (value, recursive_remainder)
 end

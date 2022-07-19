@@ -160,19 +160,18 @@ func get_entries{
 end
 
 
+@view
 func get_value{
 syscall_ptr : felt*,
 pedersen_ptr : HashBuiltin*,
 range_check_ptr
-}(aggregation_mode : felt) -> (
+}() -> (
       value : felt,
       decimals : felt,
       last_updated_timestamp : felt,
       num_sources_aggregated : felt
 ):
     alloc_locals
-
-    assert aggregation_mode = 0  # the default and the only one implemented
 
     let (entries_len, entries) = get_entries(0, syscall_ptr)
 
@@ -183,8 +182,39 @@ range_check_ptr
       let (value, _) = Entry_entries_mean(entries_len, entries, 0, 0)
       let (last_updated_timestamp) = Entry_aggregate_timestamps_max(entries_len, entries)
       return (value, 0, last_updated_timestamp, entries_len)
-
 end
+
+
+@view
+func get_value_for_sources{
+syscall_ptr : felt*,
+pedersen_ptr : HashBuiltin*,
+range_check_ptr
+}(sources_len : felt, sources : felt*) -> (
+      value : felt,
+      decimals : felt,
+      last_updated_timestamp : felt,
+      num_sources_aggregated : felt
+):
+    alloc_locals
+
+    let (entries_len, entries) = get_entries(sources_len, sources)
+
+      if entries_len == 0:
+          return (0, 0, 0, 0)
+      end
+
+      let (value, _) = Entry_entries_mean(entries_len, entries, 0, 0)
+      let (last_updated_timestamp) = Entry_aggregate_timestamps_max(entries_len, entries)
+      return (value, 0, last_updated_timestamp, entries_len)
+end
+
+
+@view
+func get_decimals() -> (decimals : felt):
+     return (0)
+end
+
 
 #
 # Library

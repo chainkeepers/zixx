@@ -27,6 +27,11 @@ Update the ETH/USD oracle using on-chain prices from the Empiric price feed
 
 Query the squared volatility index from ZIXX using command line
 
+  starknet call --address 0x068708a64989f68275bacc2a7870417559bff88f348616476d9e2e07637bc019 --abi artefacts/Aggregator.json --function get_value
+
+Query the squared volatility index from ZIXX using command line based on data
+from a single Empiric source
+
   starknet call --address 0x068708a64989f68275bacc2a7870417559bff88f348616476d9e2e07637bc019 --abi artefacts/Aggregator.json --function get_entry --input 6714488
 
 Note that

@@ -14,20 +14,22 @@ from contracts.oracle_implementation.IOracleImplementation import IOracleImpleme
 from contracts.entry.structs import Entry
 
 const EMPIRIC_ORACLE_ADDRESS = 0x012fadd18ec1a23a160cc46981400160fbf4a7a5eed156c4669e39807265bcd4
-const EMPIRIC_ORACLE_IMPLEMENTATION_ADDRESS = 0x05a88457f9292d0596090300713e80724631024e7a92989302d458271c98cad4
 const TIMESTAMP_BUFFER = 100
 
+const e = 2
+const HALF_LIFE = 3600
 
 @storage_var
 func Config_key() -> (value : felt):
 end
 
+# mapping source to map (last_state, timestamp)
 @storage_var
-func state(source : felt) -> (value : felt):
+func state(source : felt) -> (res : (felt, felt)):
 end
 
 @storage_var
-func state2(source : felt) -> (value : felt):
+func state2(source : felt) -> (res : (felt, felt)):
 end
 
 #
@@ -64,13 +66,19 @@ func update{
         EMPIRIC_ORACLE_ADDRESS, key, source
     )
 
-    let (s1) = state.read(source)
-    let (s2) = state2.read(source)
+    let (res1) = state.read(source)
+    let s1 = res1[0]
+    let last_ts = res1[1]
+    let (res2) = state2.read(source)
+    let s2 = res2[0]
+    let last_ts2 = res2[1]
 
     # update source
     let (price2) = pow(price, 2)
-    state.write(source, s1 + price)
-    state2.write(source, s2 + price2)
+    let (a) = pow(e, -(timestamp - last_ts) / HALF_LIFE)
+    let (a2) = pow(e, -(timestamp - last_ts2) / HALF_LIFE)
+    state.write(source, (a * s1 + (1 - a) * price, timestamp))
+    state2.write(source, (a * s2 + (1 - a) * price2, timestamp))
 
     # emit on update
 
@@ -84,7 +92,7 @@ end
 
 #
 # Getters
-# 
+#
 
 @view
 func get_entry{
@@ -97,8 +105,12 @@ func get_entry{
     # compute value
 
     let (key) = Config_key.read()
-    let (s1) = state.read(source)
-    let (s2) = state2.read(source)
+    let (res1) = state.read(source)
+    let s1 = res1[0]
+    let last_ts = res1[1]
+    let (res2) = state2.read(source)
+    let s2 = res2[0]
+    let last_ts2 = res2[1]
 
     let (s22) = pow(s2, 2)
     let value = s1 - s22
@@ -117,14 +129,6 @@ func get_entry{
     )
 
     return (new_entry)
-    let (s1 : felt) = state.read(source)
-    let (s2 : felt) = state2.read(source)
-
-    # update source
-    state.write(source, s1 + price)
-    state2.write(source, s2 + price)
-
-    return (s1 + price, s2 + price)
 end
 
 
@@ -142,7 +146,7 @@ func get_entries{
     let (entries : Entry*) = alloc()
 
     if sources_len == 0:
-        let (all_sources_len, all_sources) = IOracleImplementation.get_all_sources(EMPIRIC_ORACLE_IMPLEMENTATION_ADDRESS, key)
+        let (all_sources_len, all_sources) = IOracleImplementation.get_all_sources(EMPIRIC_ORACLE_ADDRESS, key)
         let (entries_len, entries) = Oracle_build_entries_array(
             key, all_sources_len, all_sources, 0, 0, entries
         )

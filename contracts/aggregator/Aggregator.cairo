@@ -30,8 +30,6 @@ end
 func state2(source : felt) -> (value : felt):
 end
 
-
-
 #
 # Constructor
 #
@@ -60,7 +58,7 @@ func update{
 }(source: felt):
     alloc_locals
 
-    let (key) = Config_key.read()  # 28556963469423460 # eth/usd
+    let (key : felt) = Config_key.read()  # 28556963469423460 # eth/usd
 
     let (price, decimals, timestamp, num_sources_aggregated) = IEmpiricOracle.get_value(
         EMPIRIC_ORACLE_ADDRESS, key, source
@@ -119,6 +117,14 @@ func get_entry{
     )
 
     return (new_entry)
+    let (s1 : felt) = state.read(source)
+    let (s2 : felt) = state2.read(source)
+
+    # update source
+    state.write(source, s1 + price)
+    state2.write(source, s2 + price)
+
+    return (s1 + price, s2 + price)
 end
 
 
